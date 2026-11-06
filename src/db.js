@@ -6,7 +6,7 @@ export async function ensure(env) {
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS users (
       tg_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, state TEXT, draft TEXT, created_at INTEGER NOT NULL)`),
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS ads (
-      id TEXT PRIMARY KEY, tg_id INTEGER NOT NULL, username TEXT, kind TEXT NOT NULL,
+      id TEXT PRIMARY KEY, tg_id INTEGER NOT NULL, username TEXT, kind TEXT NOT NULL, photo TEXT,
       city TEXT, district TEXT, type TEXT, price INTEGER, gender TEXT, people INTEGER, comment TEXT, contact TEXT,
       status TEXT NOT NULL DEFAULT 'pending',   -- pending (ждёт оплаты) | publishing | published | expired | deleted
       active INTEGER NOT NULL DEFAULT 1, group_msg_id INTEGER, pay_url TEXT, pay_exp INTEGER,
@@ -16,5 +16,6 @@ export async function ensure(env) {
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS finik_payments (
       tx_id TEXT PRIMARY KEY, ad_id TEXT NOT NULL, amount REAL NOT NULL, created_at INTEGER NOT NULL)`),
   ]);
+  try { await env.DB.prepare('ALTER TABLE ads ADD COLUMN photo TEXT').run(); } catch (e) { /* колонка уже есть */ }
   ready = true;
 }

@@ -5,7 +5,7 @@ import { createFinikPayment, finikReady, PAY_MIN } from './finik.js';
 export const PRICE = 10;
 const CITIES = ['Бишкек', 'Ош', 'Каракол', 'Джалал-Абад'];
 const GENDERS = ['Парни', 'Девушки', 'Семья', 'Любой'];
-const STEPS = ['city', 'district', 'type', 'price', 'gender', 'people', 'comment', 'contact'];
+const STEPS = ['photo', 'city', 'district', 'type', 'price', 'gender', 'people', 'comment', 'contact'];
 const PAGE = 3;
 
 const KIND = {
@@ -27,6 +27,13 @@ async function tg(env, method, body) {
   } catch (e) { return { ok: false, description: String(e) }; }
 }
 const send = (env, chat, text, extra = {}) => tg(env, 'sendMessage', { chat_id: chat, text, parse_mode: 'HTML', disable_web_page_preview: true, ...extra });
+// Объявление всегда с фото: подпись под фотографией (лимит Telegram 1024 символа, наш текст короче)
+const sendAd = (env, chat, photo, caption, extra = {}) => photo
+  ? tg(env, 'sendPhoto', { chat_id: chat, photo, caption, parse_mode: 'HTML', ...extra })
+  : send(env, chat, caption, extra);
+const editAd = (env, chat, mid, photo, text, extra = {}) => photo
+  ? tg(env, 'editMessageCaption', { chat_id: chat, message_id: mid, caption: text, parse_mode: 'HTML', ...extra })
+  : tg(env, 'editMessageText', { chat_id: chat, message_id: mid, text, parse_mode: 'HTML', disable_web_page_preview: true, ...extra });
 async function alertAdmin(env, text) { if (env.ADMIN_ID) await send(env, env.ADMIN_ID, text); }
 
 // ---------- текст объявления ----------
@@ -82,14 +89,16 @@ async function menu(env, chat) {
 async function startWizard(env, user, chat, kind) {
   if (!KIND[kind]) return menu(env, chat);
   const d = { kind };
-  await setState(env, user.tg_id, 'wiz:city', d);
-  return ask(env, chat, d, 'city', user);
+  await setState(env, user.tg_id, 'wiz:' + STEPS[0], d);
+  return ask(env, chat, d, STEPS[0], user);
 }
 async function ask(env, chat, d, step, user) {
   const n = STEPS.indexOf(step) + 1, head = `<b>${KIND[d.kind].title}</b> · шаг ${n} из ${STEPS.length}\n\n`;
   const cancel = [btn('✖ Отмена', 'menu')];
   const rent = d.kind === 'rent';
   switch (step) {
+    case 'photo':
+      return send(env, chat, head + '📷 Отправьте одно фото квартиры. Именно фото, не файлом.', { reply_markup: kb([cancel]) });
     case 'city':
       return send(env, chat, head + 'В каком городе?', { reply_markup: kb([CITIES.slice(0, 2).map(c => btn(c, 'v:city:' + c)), CITIES.slice(2).map(c => btn(c, 'v:city:' + c)), [btn('Другой город', 'v:city:*')], cancel]) });
     case 'district':
@@ -112,6 +121,7 @@ async function ask(env, chat, d, step, user) {
 }
 function validate(step, v) {
   switch (step) {
+    case 'photo': return v.length > 10 ? '' : 'Отправьте фото квартиры.';
     case 'city': case 'district': case 'type': return v.length >= 2 && v.length <= 60 ? '' : 'Напишите от 2 до 60 символов.';
     case 'price': { const n = parseInt(v.replace(/\D/g, ''), 10); return n >= 100 && n <= 10000000 ? '' : 'Введите сумму числом, например 15000.'; }
     case 'gender': return GENDERS.includes(v) ? '' : 'Выберите вариант кнопкой.';
@@ -133,7 +143,7 @@ async function accept(env, user, chat, step, raw) {
   return preview(env, chat, d);
 }
 async function preview(env, chat, d) {
-  return send(env, chat, adText({ ...d, active: 1 }) + `\n\n— — —\nТак объявление выглядит в группе. Публикация: ${PRICE} сом.`, {
+  return sendAd(env, chat, d.photo, adText({ ...d, active: 1 }) + `\n\n— — —\nТак объявление выглядит в группе. Публикация: ${PRICE} сом.`, {
     reply_markup: kb([[btn(`💳 Оплатить ${PRICE} сом`, 'pay')], [btn('✏️ Заполнить заново', 'new:' + d.kind), btn('✖ Отмена', 'menu')]]),
   });
 }
@@ -146,8 +156,8 @@ async function pay(env, user, chat, origin) {
   let ad = d.ad_id ? await env.DB.prepare("SELECT * FROM ads WHERE id = ? AND status = 'pending'").bind(d.ad_id).first() : null;
   if (!ad || !ad.pay_url || ad.pay_exp < Date.now() + 60000) {
     const id = 'KV' + rid(8), now = Date.now();
-    await env.DB.prepare("INSERT INTO ads (id, tg_id, username, kind, city, district, type, price, gender, people, comment, contact, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'pending',?)")
-      .bind(id, user.tg_id, user.username, d.kind, d.city, d.district, d.type, d.price, d.gender, d.people, d.comment || '', d.contact, now).run();
+    await env.DB.prepare("INSERT INTO ads (id, tg_id, username, kind, photo, city, district, type, price, gender, people, comment, contact, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'pending',?)")
+      .bind(id, user.tg_id, user.username, d.kind, d.photo, d.city, d.district, d.type, d.price, d.gender, d.people, d.comment || '', d.contact, now).run();
     const back = env.BOT_USERNAME ? 'https://t.me/' + String(env.BOT_USERNAME).replace('@', '') : 'https://t.me/';
     const p = await createFinikPayment(env, { id, amount: PRICE, desc: 'Объявление Квартирник ' + id }, origin, back);
     if (p.error) {
@@ -172,7 +182,7 @@ export async function onPaid(env, adId, amount) {
   // «expired» тоже публикуем: клиент мог оплатить на последней минуте
   const lock = await env.DB.prepare("UPDATE ads SET status = 'publishing', paid_at = ? WHERE id = ? AND status IN ('pending','expired')").bind(Date.now(), ad.id).run();
   if (!lock.meta.changes) return;
-  const r = await tg(env, 'sendMessage', { chat_id: env.GROUP_ID, text: adText({ ...ad, active: 1 }), parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: contactMarkup(ad) });
+  const r = await sendAd(env, env.GROUP_ID, ad.photo, adText({ ...ad, active: 1 }), { reply_markup: contactMarkup(ad) });
   if (!r.ok) {
     await env.DB.prepare("UPDATE ads SET status = 'pending' WHERE id = ?").bind(ad.id).run();
     await alertAdmin(env, `⚠️ Объявление ${ad.id} оплачено, но не опубликовано: ${esc(r.description || '')}. Проверьте, что бот админ группы и GROUP_ID верный.`);
@@ -201,7 +211,7 @@ const ownerButtons = (env, a) => {
 async function myAds(env, user, chat) {
   const { results } = await env.DB.prepare("SELECT * FROM ads WHERE tg_id = ? AND status = 'published' ORDER BY created_at DESC LIMIT 10").bind(user.tg_id).all();
   if (!results.length) return send(env, chat, 'У вас пока нет опубликованных объявлений.', { reply_markup: kb([[btn('🏠 Сдать', 'new:rent'), btn('🔍 Найти', 'new:seek')], [btn('« Меню', 'menu')]]) });
-  for (const a of results) await send(env, chat, adText(a), { reply_markup: ownerButtons(env, a) });
+  for (const a of results) await sendAd(env, chat, a.photo, adText(a), { reply_markup: ownerButtons(env, a) });
   return send(env, chat, 'Показаны последние 10 объявлений.', { reply_markup: kb([[btn('« Меню', 'menu')]]) });
 }
 async function toggle(env, user, chat, mid, id) {
@@ -209,8 +219,8 @@ async function toggle(env, user, chat, mid, id) {
   if (!a) return;
   a.active = a.active ? 0 : 1;
   await env.DB.prepare('UPDATE ads SET active = ? WHERE id = ?').bind(a.active, a.id).run();
-  await tg(env, 'editMessageText', { chat_id: env.GROUP_ID, message_id: a.group_msg_id, text: adText(a), parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: contactMarkup(a) });
-  await tg(env, 'editMessageText', { chat_id: chat, message_id: mid, text: adText(a), parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: ownerButtons(env, a) });
+  await editAd(env, env.GROUP_ID, a.group_msg_id, a.photo, adText(a), { reply_markup: contactMarkup(a) });
+  await editAd(env, chat, mid, a.photo, adText(a), { reply_markup: ownerButtons(env, a) });
 }
 async function askDelete(env, user, chat, id) {
   const a = await env.DB.prepare("SELECT * FROM ads WHERE id = ? AND tg_id = ? AND status = 'published'").bind(id, user.tg_id).first();
@@ -233,7 +243,7 @@ async function browse(env, chat, kind, page) {
     const link = postLink(env, a.group_msg_id), rows = [];
     const c = contactMarkup(a); if (c) rows.push(c.inline_keyboard[0][0]);
     if (link) rows.push({ text: '📣 В группе', url: link });
-    await send(env, chat, adText(a), rows.length ? { reply_markup: kb([rows]) } : {});
+    await sendAd(env, chat, a.photo, adText(a), rows.length ? { reply_markup: kb([rows]) } : {});
   }
   const nav = []; if (page) nav.push(btn('← Назад', `b:${kind}:${page - 1}`)); if (results.length > PAGE) nav.push(btn('Далее →', `b:${kind}:${page + 1}`));
   return send(env, chat, 'Это ещё не всё? Листайте дальше.', { reply_markup: kb([...(nav.length ? [nav] : []), [btn('« Меню', 'menu')]]) });
@@ -248,7 +258,15 @@ export async function handleUpdate(env, u, origin) {
   if (!m || !m.from || m.chat.type !== 'private') return;
   const user = await getUser(env, m.from), chat = m.chat.id, text = (m.text || '').trim();
   if (/^\/(start|menu)/.test(text)) { await setState(env, user.tg_id, null, null); return menu(env, chat); }
-  if (user.state && user.state.startsWith('wiz:') && text) return accept(env, user, chat, user.state.slice(4), text);
+  if (user.state && user.state.startsWith('wiz:')) {
+    const step = user.state.slice(4);
+    if (step === 'photo') {
+      if (m.photo && m.photo.length) return accept(env, user, chat, 'photo', m.photo[m.photo.length - 1].file_id);   // последний размер = самый крупный
+      return send(env, chat, '⚠️ Нужно фото квартиры. Отправьте именно фото, не файлом и не текстом.');
+    }
+    if (m.photo) return;   // лишние фото из альбома на других шагах не мешаем
+    if (text) return accept(env, user, chat, step, text);
+  }
   return menu(env, chat);
 }
 async function onCallback(env, cq, origin) {
