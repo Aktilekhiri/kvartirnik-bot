@@ -41,6 +41,10 @@ const msg = text => handleUpdate(env, { message: { text, from, chat: { id: 777, 
 const cb = data => handleUpdate(env, { callback_query: { id: 'c', data, from, message: { chat: { id: 777 }, message_id: 5 } } }, 'https://w.test');
 const lastSent = () => [...tgCalls].reverse().find(c => c.m === 'sendMessage' && c.body.chat_id === 777).body;
 
+// 0. /id в группе
+await handleUpdate(env, { message: { text: '/id@kv_bot', from, chat: { id: -100555, type: 'supergroup' } } }, 'https://w.test');
+assert.match(tgCalls.pop().body.text, /-100555/);
+
 // 1. меню
 await msg('/start');
 assert.match(lastSent().text, /Добро пожаловать/);

@@ -243,6 +243,8 @@ async function browse(env, chat, kind, page) {
 export async function handleUpdate(env, u, origin) {
   if (u.callback_query) return onCallback(env, u.callback_query, origin);
   const m = u.message;
+  // /id в любом чате (в том числе в группе) отвечает номером чата: нужен для GROUP_ID
+  if (m && /^\/id(@\w+)?\s*$/i.test((m.text || '').trim())) return send(env, m.chat.id, `ID этого чата: <code>${m.chat.id}</code>`);
   if (!m || !m.from || m.chat.type !== 'private') return;
   const user = await getUser(env, m.from), chat = m.chat.id, text = (m.text || '').trim();
   if (/^\/(start|menu)/.test(text)) { await setState(env, user.tg_id, null, null); return menu(env, chat); }
