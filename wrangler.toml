@@ -1,0 +1,28 @@
+name = "kvartirnik-bot"
+main = "src/index.js"
+compatibility_date = "2025-07-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "kvartirnik-db"
+database_id = "ЗАМЕНИТЬ_НА_ID_БАЗЫ"
+
+[triggers]
+crons = ["*/10 * * * *"]
+
+[observability]
+enabled = true
+
+# Переменные (не секретные), можно прямо здесь:
+[vars]
+BOT_USERNAME = ""     # например kvartirnik_kg_bot (без @), нужен для кнопки возврата после оплаты
+GROUP_LINK = ""       # ссылка-приглашение в группу, например https://t.me/+AbCdEf...
+GROUP_USERNAME = ""   # только если группа публичная (без @); иначе оставить пустым
+
+# Секреты (Cloudflare → Workers → kvartirnik-bot → Settings → Variables and Secrets, тип Secret):
+#   BOT_TOKEN        токен от @BotFather
+#   WEBHOOK_SECRET   любая длинная случайная строка (латиница и цифры)
+#   GROUP_ID         id группы, вида -100XXXXXXXXXX
+#   ADMIN_ID         (необязательно) ваш Telegram id, сюда придут сообщения об ошибках оплаты
+#   FINIK_API_KEY, FINIK_PRIVATE_KEY, FINIK_PUBLIC_KEY, FINIK_ACCOUNT_ID   как на diamond.kg
+#   FINIK_QR_NAME    (необязательно) имя QR в банковском приложении, по умолчанию kvartirnik
