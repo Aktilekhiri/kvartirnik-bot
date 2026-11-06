@@ -1,11 +1,11 @@
-name = "kvartirnik-bot"
+name = "kvartirnik-bot007"
 main = "src/index.js"
 compatibility_date = "2025-07-01"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "kvartirnik-db"
-database_id = "ЗАМЕНИТЬ_НА_ID_БАЗЫ"
+database_id = "0b579118-d000-4733-a551-76fcf8d15b1d"
 
 [triggers]
 crons = ["*/10 * * * *"]
@@ -19,7 +19,7 @@ BOT_USERNAME = ""     # например kvartirnik_kg_bot (без @), нуже�
 GROUP_LINK = ""       # ссылка-приглашение в группу, например https://t.me/+AbCdEf...
 GROUP_USERNAME = ""   # только если группа публичная (без @); иначе оставить пустым
 
-# Секреты (Cloudflare → Workers → kvartirnik-bot → Settings → Variables and Secrets, тип Secret):
+# Секреты (Cloudflare → Workers → kvartirnik-bot007 → Settings → Variables and Secrets, тип Secret):
 #   BOT_TOKEN        токен от @BotFather
 #   WEBHOOK_SECRET   любая длинная случайная строка (латиница и цифры)
 #   GROUP_ID         id группы, вида -100XXXXXXXXXX
