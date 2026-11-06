@@ -15,9 +15,9 @@ enabled = true
 
 # Переменные (не секретные), можно прямо здесь:
 [vars]
-BOT_USERNAME = ""     # например kvartirnik_kg_bot (без @), нужен для кнопки возврата после оплаты
-GROUP_LINK = ""       # ссылка-приглашение в группу, например https://t.me/+AbCdEf...
-GROUP_USERNAME = ""   # только если группа публичная (без @); иначе оставить пустым
+BOT_USERNAME = "kvartirnik007_bot"     # например kvartirnik_kg_bot (без @), нужен для кнопки возврата после оплаты
+GROUP_LINK = "https://t.me/kvartirnik007"       # ссылка-приглашение в группу, например https://t.me/+AbCdEf...
+GROUP_USERNAME = "kvartirnik007"   # только если группа публичная (без @); иначе оставить пустым
 
 # Секреты (Cloudflare → Workers → kvartirnik-bot007 → Settings → Variables and Secrets, тип Secret):
 #   BOT_TOKEN        токен от @BotFather
