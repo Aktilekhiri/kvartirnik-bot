@@ -47,6 +47,11 @@ const txt = b => b.text || b.caption;
 await handleUpdate(env, { message: { text: '/id@kv_bot', from, chat: { id: -100555, type: 'supergroup' } } }, 'https://w.test');
 assert.match(tgCalls.pop().body.text, /-100555/);
 
+// 0b. переход из группы по кнопке «Создать объявление»
+await msg('/start new');
+assert.match(lastSent().text, /Что хотите разместить/);
+assert.equal(lastSent().reply_markup.inline_keyboard[0][0].callback_data, 'new:rent');
+
 // 1. меню
 await msg('/start');
 assert.match(lastSent().text, /Добро пожаловать/);
@@ -88,6 +93,8 @@ const pub = tgCalls.slice(before).find(c => c.m === 'sendPhoto' && c.body.chat_i
 assert.ok(pub, 'объявление не ушло в группу'); assert.equal(pub.body.photo, 'AAA_BIG_FILE'); assert.match(pub.body.caption, /СДАЮ КВАРТИРУ/);
 assert.match(pub.body.caption, /&lt;b&gt;/);   // HTML экранируется
 assert.equal(pub.body.reply_markup.inline_keyboard[0][0].url, 'https://t.me/aktilek');
+assert.match(pub.body.reply_markup.inline_keyboard[1][0].text, /Создать объявление/);
+assert.equal(pub.body.reply_markup.inline_keyboard[1][0].url, 'https://t.me/kv_bot?start=new');
 assert.equal(sqlite.prepare('SELECT status FROM ads').get().status, 'published');
 const n = tgCalls.length;
 r = await finikWebhook(env, mkReq(payload, theirs.privateKey), onPaid); assert.equal(r.body, 'duplicate'); assert.equal(tgCalls.length, n);

@@ -53,9 +53,17 @@ export function adText(a) {
   L.push((city ? '#' + city + ' ' : '') + k.tag);
   return L.join('\n');
 }
-function contactMarkup(a) {
+const contactBtn = a => {
   const m = /^@([A-Za-z0-9_]{4,32})$/.exec(String(a.contact).trim());
-  return m ? kb([[{ text: '✉️ Написать', url: 'https://t.me/' + m[1] }]]) : undefined;
+  return m ? { text: '✉️ Написать', url: 'https://t.me/' + m[1] } : null;
+};
+const botLink = (env, start) => env.BOT_USERNAME ? `https://t.me/${String(env.BOT_USERNAME).replace('@', '')}${start ? '?start=' + start : ''}` : null;
+// Кнопки под объявлением в группе: «Написать» (если контакт @username) и «Создать объявление»
+function groupMarkup(env, a) {
+  const rows = [], c = contactBtn(a), l = botLink(env, 'new');
+  if (c) rows.push([c]);
+  if (l) rows.push([{ text: '➕ Создать объявление', url: l }]);
+  return rows.length ? kb(rows) : undefined;
 }
 function postLink(env, msgId) {
   if (!msgId) return null;
@@ -185,7 +193,7 @@ export async function onPaid(env, adId, amount) {
   // «expired» тоже публикуем: клиент мог оплатить на последней минуте
   const lock = await env.DB.prepare("UPDATE ads SET status = 'publishing', paid_at = ? WHERE id = ? AND status IN ('pending','expired')").bind(Date.now(), ad.id).run();
   if (!lock.meta.changes) return;
-  const r = await sendAd(env, env.GROUP_ID, ad.photo, adText({ ...ad, active: 1 }), { reply_markup: contactMarkup(ad) });
+  const r = await sendAd(env, env.GROUP_ID, ad.photo, adText({ ...ad, active: 1 }), { reply_markup: groupMarkup(env, ad) });
   if (!r.ok) {
     await env.DB.prepare("UPDATE ads SET status = 'pending' WHERE id = ?").bind(ad.id).run();
     await alertAdmin(env, `⚠️ Объявление ${ad.id} оплачено, но не опубликовано: ${esc(r.description || '')}. Проверьте, что бот админ группы и GROUP_ID верный.`);
@@ -222,7 +230,7 @@ async function toggle(env, user, chat, mid, id) {
   if (!a) return;
   a.active = a.active ? 0 : 1;
   await env.DB.prepare('UPDATE ads SET active = ? WHERE id = ?').bind(a.active, a.id).run();
-  await editAd(env, env.GROUP_ID, a.group_msg_id, a.photo, adText(a), { reply_markup: contactMarkup(a) });
+  await editAd(env, env.GROUP_ID, a.group_msg_id, a.photo, adText(a), { reply_markup: groupMarkup(env, a) });
   await editAd(env, chat, mid, a.photo, adText(a), { reply_markup: ownerButtons(env, a) });
 }
 async function askDelete(env, user, chat, id) {
@@ -244,7 +252,7 @@ async function browse(env, chat, kind, page) {
   if (!results.length) return send(env, chat, page ? 'Больше объявлений нет.' : 'Пока объявлений нет.', { reply_markup: kb([[btn('« Назад', 'br')]]) });
   for (const a of results.slice(0, PAGE)) {
     const link = postLink(env, a.group_msg_id), rows = [];
-    const c = contactMarkup(a); if (c) rows.push(c.inline_keyboard[0][0]);
+    const c = contactBtn(a); if (c) rows.push(c);
     if (link) rows.push({ text: '📣 В группе', url: link });
     await sendAd(env, chat, a.photo, adText(a), rows.length ? { reply_markup: kb([rows]) } : {});
   }
@@ -260,6 +268,10 @@ export async function handleUpdate(env, u, origin) {
   if (m && /^\/id(@\w+)?\s*$/i.test((m.text || '').trim())) return send(env, m.chat.id, `ID этого чата: <code>${m.chat.id}</code>`);
   if (!m || !m.from || m.chat.type !== 'private') return;
   const user = await getUser(env, m.from), chat = m.chat.id, text = (m.text || '').trim();
+  if (/^\/start\s+new\b/.test(text)) {   // кнопка «Создать объявление» из группы
+    await setState(env, user.tg_id, null, null);
+    return send(env, chat, 'Что хотите разместить? Объявление стоит ' + PRICE + ' сом.', { reply_markup: kb([[btn('🏠 Сдать квартиру', 'new:rent')], [btn('🔍 Найти квартиру', 'new:seek')], [btn('« Меню', 'menu')]]) });
+  }
   if (/^\/(start|menu)/.test(text)) { await setState(env, user.tg_id, null, null); return menu(env, chat); }
   if (user.state && user.state.startsWith('wiz:')) {
     const step = user.state.slice(4);
