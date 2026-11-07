@@ -6,6 +6,7 @@ export const PRICE = 10;
 const CITIES = ['Бишкек', 'Ош', 'Каракол', 'Джалал-Абад'];
 const GENDERS = ['Парни', 'Девушки', 'Семья', 'Любой'];
 const STEPS = ['photo', 'city', 'district', 'type', 'price', 'gender', 'people', 'comment', 'contact'];
+const stepsFor = kind => kind === 'rent' ? STEPS : STEPS.filter(x => x !== 'photo');   // фото только у тех, кто сдаёт
 const PAGE = 3;
 
 const KIND = {
@@ -89,11 +90,12 @@ async function menu(env, chat) {
 async function startWizard(env, user, chat, kind) {
   if (!KIND[kind]) return menu(env, chat);
   const d = { kind };
-  await setState(env, user.tg_id, 'wiz:' + STEPS[0], d);
-  return ask(env, chat, d, STEPS[0], user);
+  const first = stepsFor(kind)[0];
+  await setState(env, user.tg_id, 'wiz:' + first, d);
+  return ask(env, chat, d, first, user);
 }
 async function ask(env, chat, d, step, user) {
-  const n = STEPS.indexOf(step) + 1, head = `<b>${KIND[d.kind].title}</b> · шаг ${n} из ${STEPS.length}\n\n`;
+  const st = stepsFor(d.kind), n = st.indexOf(step) + 1, head = `<b>${KIND[d.kind].title}</b> · шаг ${n} из ${st.length}\n\n`;
   const cancel = [btn('✖ Отмена', 'menu')];
   const rent = d.kind === 'rent';
   switch (step) {
@@ -137,8 +139,9 @@ async function accept(env, user, chat, step, raw) {
   const err = validate(step, v);
   if (err) return send(env, chat, '⚠️ ' + err);
   d[step] = step === 'price' || step === 'people' ? parseInt(v.replace(/\D/g, ''), 10) : v;
-  const i = STEPS.indexOf(step);
-  if (i < STEPS.length - 1) { await setState(env, user.tg_id, 'wiz:' + STEPS[i + 1], d); return ask(env, chat, d, STEPS[i + 1], user); }
+  const st = stepsFor(d.kind), i = st.indexOf(step);
+  if (i < 0) return menu(env, chat);   // шаг не из этой анкеты (старая кнопка)
+  if (i < st.length - 1) { await setState(env, user.tg_id, 'wiz:' + st[i + 1], d); return ask(env, chat, d, st[i + 1], user); }
   await setState(env, user.tg_id, 'prev', d);
   return preview(env, chat, d);
 }
@@ -157,7 +160,7 @@ async function pay(env, user, chat, origin) {
   if (!ad || !ad.pay_url || ad.pay_exp < Date.now() + 60000) {
     const id = 'KV' + rid(8), now = Date.now();
     await env.DB.prepare("INSERT INTO ads (id, tg_id, username, kind, photo, city, district, type, price, gender, people, comment, contact, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'pending',?)")
-      .bind(id, user.tg_id, user.username, d.kind, d.photo, d.city, d.district, d.type, d.price, d.gender, d.people, d.comment || '', d.contact, now).run();
+      .bind(id, user.tg_id, user.username, d.kind, d.photo || null, d.city, d.district, d.type, d.price, d.gender, d.people, d.comment || '', d.contact, now).run();
     const back = env.BOT_USERNAME ? 'https://t.me/' + String(env.BOT_USERNAME).replace('@', '') : 'https://t.me/';
     const p = await createFinikPayment(env, { id, amount: PRICE, desc: 'Объявление Квартирник ' + id }, origin, back);
     if (p.error) {

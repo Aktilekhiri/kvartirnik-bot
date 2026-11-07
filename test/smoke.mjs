@@ -94,13 +94,14 @@ r = await finikWebhook(env, mkReq(payload, theirs.privateKey), onPaid); assert.e
 
 // 5. неполная оплата не публикует
 await cb('new:seek');
-await photoMsg('BBB');
+assert.match(lastSent().text, /шаг 1 из 8/); assert.match(lastSent().text, /городе/);   // у «Ищу» нет шага с фото
 for (const t of ['Бишкек']) await cb('v:city:' + t);
 await msg('Джал'); await msg('1-комн.'); await msg('12000'); await cb('v:gender:Парни'); await msg('1'); await cb('v:comment:'); await msg('+996700123456');
 await cb('pay');
 const ad2 = sqlite.prepare("SELECT * FROM ads WHERE kind='seek'").get(); assert.equal(ad2.price, 12000);
 await finikWebhook(env, mkReq({ status: 'SUCCEEDED', transactionId: 'tx2', amount: 5, fields: { paymentId: ad2.id } }, theirs.privateKey), onPaid);
 assert.equal(sqlite.prepare("SELECT status FROM ads WHERE kind='seek'").get().status, 'pending');
+assert.equal(sqlite.prepare("SELECT photo FROM ads WHERE kind='seek'").get().photo, null);
 
 // 6. профиль, переключение актуальности, просмотр, удаление
 await cb('my'); assert.match(txt(lastSent()), /последние 10|Показаны/);
